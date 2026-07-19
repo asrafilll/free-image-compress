@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Free Image Compress</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #161b22; --border: #262d38;
+    --text: #e6e9ee; --dim: #8b95a5; --accent: #4ade80; --accent-dim: #14532d;
+    --error: #f87171;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6f7f9; --panel: #ffffff; --border: #e2e6eb;
+      --text: #1a212b; --dim: #6a7381; --accent: #16a34a; --accent-dim: #dcfce7;
+      --error: #dc2626;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text);
+    max-width: 760px; margin: 0 auto; padding: 40px 20px 80px;
+  }
+  h1 { font-size: 22px; letter-spacing: -0.02em; }
+  h1 span { color: var(--accent); }
+  .tagline { color: var(--dim); margin: 4px 0 28px; font-size: 14px; }
+
+  .dropzone {
+    border: 2px dashed var(--border); border-radius: 14px;
+    background: var(--panel); padding: 48px 24px; text-align: center;
+    cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .dropzone:hover, .dropzone.over { border-color: var(--accent); }
+  .dropzone .big { font-size: 17px; font-weight: 600; }
+  .dropzone .hint { color: var(--dim); font-size: 13px; margin-top: 6px; }
+  input[type="file"] { display: none; }
+
+  .controls {
+    display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+    margin: 16px 0 8px; font-size: 13px;
+  }
+  .controls label { color: var(--dim); }
+  select {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 10px; font-size: 13px;
+  }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg input { display: none; }
+  .seg span {
+    padding: 6px 12px; cursor: pointer; color: var(--dim); background: var(--panel);
+    border-right: 1px solid var(--border); user-select: none;
+  }
+  .seg label:last-child span { border-right: 0; }
+  .seg input:checked + span { color: var(--text); background: var(--accent-dim); }
+
+  .results-head {
+    display: flex; justify-content: space-between; align-items: center; margin: 20px 0 10px;
+  }
+  #status { color: var(--dim); font-size: 13px; }
+  #zip-all {
+    display: none; background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 14px;
+    font-size: 13px; cursor: pointer;
+  }
+  #zip-all:hover { border-color: var(--accent); }
+
+  #results { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .card {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 14px;
+  }
+  .thumb {
+    width: 48px; height: 48px; object-fit: cover; border-radius: 8px;
+    background: var(--border); flex: none;
+  }
+  .meta { min-width: 0; flex: 1; }
+  .name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sizes { color: var(--dim); font-size: 13px; }
+  .fmt {
+    font-size: 10px; font-weight: 700; letter-spacing: .05em;
+    border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; margin-left: 6px;
+  }
+  .badge {
+    flex: none; font-weight: 700; font-size: 13px; color: var(--accent);
+    background: var(--accent-dim); border-radius: 999px; padding: 4px 10px;
+  }
+  .badge.muted { color: var(--dim); background: transparent; border: 1px solid var(--border); font-weight: 500; }
+  .card.error { border-color: var(--error); }
+  .card.error .sizes { color: var(--error); }
+  .card.pending .thumb { opacity: .5; }
+  .spinner {
+    flex: none; width: 18px; height: 18px; border-radius: 50%;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .dl {
+    flex: none; color: var(--accent); text-decoration: none; font-weight: 600;
+    font-size: 13px; border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px;
+  }
+  .dl:hover { border-color: var(--accent); }
+  footer { margin-top: 40px; color: var(--dim); font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+  <h1>Free Image <span>Compress</span></h1>
+  <p class="tagline">Smart AVIF, WebP, PNG &amp; JPEG compression. 100% local — images never leave this machine.</p>
+
+  <div class="dropzone" id="dropzone">
+    <div class="big">Drop images here or click to browse</div>
+    <div class="hint">JPEG, PNG, WebP, AVIF &middot; up to 50 MB per file</div>
+    <input type="file" id="files" accept="image/jpeg,image/png,image/webp,image/avif" multiple>
+  </div>
+
+  <div class="controls">
+    <label>Output
+      <select id="format">
+        <option value="auto" selected>Auto (smallest)</option>
+        <option value="keep">Keep format</option>
+        <option value="avif">AVIF</option>
+        <option value="webp">WebP</option>
+        <option value="jpeg">JPEG</option>
+        <option value="png">PNG</option>
+      </select>
+    </label>
+    <div class="seg" id="modes" role="radiogroup" aria-label="Compression level">
+      <label><input type="radio" name="mode" value="high"><span>High quality</span></label>
+      <label><input type="radio" name="mode" value="balanced" checked><span>Balanced</span></label>
+      <label><input type="radio" name="mode" value="small"><span>Smallest</span></label>
+    </div>
+  </div>
+
+  <div class="results-head">
+    <div id="status"></div>
+    <button id="zip-all" type="button">Download all (.zip)</button>
+  </div>
+  <ul id="results"></ul>
+
+  <footer>Open source &middot; MIT &middot; runs entirely on your machine, no database, nothing stored</footer>
+
+<script>
+  const input = document.getElementById('files');
+  const dropzone = document.getElementById('dropzone');
+  const results = document.getElementById('results');
+  const status = document.getElementById('status');
+  const zipBtn = document.getElementById('zip-all');
+  const formatSel = document.getElementById('format');
+
+  const CONCURRENCY = 2;
+  const jobs = new Map();          // id -> File (kept so settings changes can re-run)
+  const controllers = new Set();
+  let seq = 0;
+  let gen = 0;                     // bumped on settings change; stale responses are dropped
+  let queue = [];
+  let active = 0;
+
+  const esc = (s) => s.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+  const fmtBytes = (n) => {
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+    return (n / 1048576).toFixed(2) + ' MB';
+  };
+  const settings = () => ({
+    format: formatSel.value,
+    mode: document.querySelector('#modes input:checked').value,
+  });
+
+  function pendingCard(id, file) {
+    const li = document.createElement('li');
+    li.className = 'card pending';
+    li.id = 'job-' + id;
+    li.innerHTML = `
+      <img class="thumb" src="${URL.createObjectURL(file)}" alt="">
+      <div class="meta">
+        <div class="name" title="${esc(file.name)}">${esc(file.name)}</div>
+        <div class="sizes">${fmtBytes(file.size)} &middot; waiting&hellip;</div>
+      </div>
+      <div class="spinner"></div>`;
+    return li;
+  }
+
+  function addFiles(fileList) {
+    for (const file of fileList) {
+      if (!/^image\/(jpeg|png|webp|avif)$/.test(file.type)) continue;
+      const id = ++seq;
+      jobs.set(id, file);
+      results.prepend(pendingCard(id, file));
+      queue.push({ id, gen });
+    }
+    pump();
+  }
+
+  function reprocessAll() {
+    if (jobs.size === 0) return;
+    gen++;
+    for (const c of controllers) c.abort();
+    controllers.clear();
+    queue = [];
+    active = 0;
+    results.innerHTML = '';
+    for (const [id, file] of jobs) {
+      results.prepend(pendingCard(id, file));
+      queue.push({ id, gen });
+    }
+    updateStatus();
+    pump();
+  }
+
+  function updateStatus() {
+    const left = queue.length + active;
+    status.textContent = left > 0 ? `Compressing ${left} image${left > 1 ? 's' : ''}…` : '';
+    zipBtn.style.display = results.querySelector('a[data-zip]') ? 'inline-block' : 'none';
+  }
+
+  function pump() {
+    while (active < CONCURRENCY && queue.length) {
+      const job = queue.shift();
+      if (job.gen !== gen) continue;
+      active++;
+      run(job).finally(() => {
+        if (job.gen === gen) active--;
+        updateStatus();
+        pump();
+      });
+    }
+    updateStatus();
+  }
+
+  async function run(job) {
+    const file = jobs.get(job.id);
+    const li = document.getElementById('job-' + job.id);
+    if (!li) return;
+    li.querySelector('.sizes').innerHTML = fmtBytes(file.size) + ' &middot; compressing&hellip;';
+
+    const fd = new FormData();
+    fd.append('files', file);
+    const { format, mode } = settings();
+    fd.append('format', format);
+    fd.append('mode', mode);
+
+    const controller = new AbortController();
+    controllers.add(controller);
+    try {
+      const res = await fetch('/compress', { method: 'POST', body: fd, signal: controller.signal });
+      if (job.gen !== gen) return;
+      if (!res.ok) throw new Error('Server error ' + res.status);
+      const html = await res.text();
+      if (job.gen !== gen) return;
+      li.outerHTML = html;
+    } catch (err) {
+      if (err.name === 'AbortError' || job.gen !== gen) return;
+      li.classList.remove('pending');
+      li.classList.add('error');
+      li.querySelector('.sizes').textContent = err.message || 'Compression failed';
+      li.querySelector('.spinner')?.remove();
+    } finally {
+      controllers.delete(controller);
+    }
+  }
+
+  // Settings change -> restart compression for everything already dropped
+  formatSel.addEventListener('change', reprocessAll);
+  document.getElementById('modes').addEventListener('change', reprocessAll);
+
+  dropzone.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => {
+    if (input.files.length) addFiles(input.files);
+    input.value = '';
+  });
+  ['dragenter', 'dragover'].forEach((ev) =>
+    dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((ev) =>
+    dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove('over'); }));
+  dropzone.addEventListener('drop', (e) => {
+    if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+  });
+  document.body.addEventListener('paste', (e) => {
+    const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'));
+    if (files.length) addFiles(files);
+  });
+
+  // --- Store-only ZIP built client-side from the data-URI download links ---
+  const CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      t[n] = c;
+    }
+    return t;
+  })();
+  const crc32 = (bytes) => {
+    let c = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const le16 = (n) => new Uint8Array([n & 0xff, (n >> 8) & 0xff]);
+  const le32 = (n) => new Uint8Array([n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff, (n >>> 24) & 0xff]);
+
+  zipBtn.addEventListener('click', async () => {
+    const links = [...document.querySelectorAll('#results a[data-zip]')];
+    if (!links.length) return;
+    zipBtn.disabled = true;
+    zipBtn.textContent = 'Zipping…';
+    try {
+      const enc = new TextEncoder();
+      const parts = [];
+      const central = [];
+      let offset = 0;
+      const seen = new Map();
+      for (const link of links) {
+        const data = new Uint8Array(await (await fetch(link.href)).arrayBuffer());
+        let name = link.getAttribute('download') || 'image';
+        const n = (seen.get(name) || 0) + 1;
+        seen.set(name, n);
+        if (n > 1) name = name.replace(/(\.[^.]*)?$/, `-${n}$1`);
+        const nameBytes = enc.encode(name);
+        const crc = crc32(data);
+        const local = [
+          le32(0x04034b50), le16(20), le16(0x0800), le16(0), le16(0), le16(0),
+          le32(crc), le32(data.length), le32(data.length),
+          le16(nameBytes.length), le16(0), nameBytes, data,
+        ];
+        central.push({ crc, size: data.length, nameBytes, offset });
+        for (const p of local) { parts.push(p); offset += p.length; }
+      }
+      const cdStart = offset;
+      let cdSize = 0;
+      for (const f of central) {
+        const rec = [
+          le32(0x02014b50), le16(20), le16(20), le16(0x0800), le16(0), le16(0), le16(0),
+          le32(f.crc), le32(f.size), le32(f.size),
+          le16(f.nameBytes.length), le16(0), le16(0), le16(0), le16(0),
+          le32(0), le32(f.offset), f.nameBytes,
+        ];
+        for (const p of rec) { parts.push(p); cdSize += p.length; }
+      }
+      parts.push(le32(0x06054b50), le16(0), le16(0), le16(central.length), le16(central.length), le32(cdSize), le32(cdStart), le16(0));
+      const blob = new Blob(parts, { type: 'application/zip' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'compressed-images.zip';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } finally {
+      zipBtn.disabled = false;
+      zipBtn.textContent = 'Download all (.zip)';
+    }
+  });
+</script>
+</body>
+</html>

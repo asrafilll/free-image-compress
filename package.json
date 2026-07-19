@@ -1,0 +1,32 @@
+{
+  "name": "free-image-compress",
+  "version": "0.1.0",
+  "description": "Smart AVIF, WebP, PNG and JPEG compression for faster websites. Local, private, no database.",
+  "type": "module",
+  "bin": {
+    "free-image-compress": "server/index.js"
+  },
+  "scripts": {
+    "start": "node server/index.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "image",
+    "compression",
+    "avif",
+    "webp",
+    "png",
+    "jpeg",
+    "tinypng",
+    "optimizer",
+    "htmx"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@hono/node-server": "^2.0.10",
+    "hono": "^4.12.31",
+    "sharp": "^0.35.3"
+  }
+}
