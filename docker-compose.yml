@@ -4,5 +4,5 @@ services:
     image: free-image-compress
     container_name: free-image-compress
     ports:
-      - "3210:3000"
+      - "127.0.0.1:3210:3000"
     restart: unless-stopped
